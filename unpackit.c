@@ -7,7 +7,7 @@ static size_t
 read_buffer (unsigned max_length, uint8_t *out)
 {
   size_t cur_len = 0;
-  uint8_t c;
+  uint8_t c,nread;
   while ((nread=fread(out + cur_len, 1, max_length - cur_len, stdin)) != 0)
     {
       cur_len += nread;
