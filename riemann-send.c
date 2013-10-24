@@ -26,9 +26,27 @@ int main (int argc, const char * argv[])
      len = amessage__get_packed_size(&msg); */
 
     Event evt = EVENT__INIT; // AMessage
+    evt.time = 1234567890;
     evt.state = "ok";
     evt.service = "service111";
     evt.host = "myhost";
+    evt.description = "this is the description";
+
+    char *tags[] = { "one", "two", "three", NULL };
+    // char *attrs[] =  { "foo=bar", "qux=xyz", NULL };
+
+    Attribute attrs = ATTRIBUTE__INIT;
+    attrs.key = "foo";
+    attrs.value = "bar";
+
+    evt.n_tags = 3;
+    evt.tags =  tags;
+    evt.ttl = 86400;
+
+    evt.n_attributes = 1;
+    evt.attributes = malloc(sizeof(Attribute) * evt.n_attributes);
+    evt.attributes[0] = &attrs;
+
     evt.has_metric_sint64 = 1;
     evt.metric_sint64 = 123;
 
