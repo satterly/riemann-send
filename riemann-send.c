@@ -17,7 +17,7 @@ tokenize(char *str, char *delim, char **splitstr)
   p = strtok(str, delim);      
   while(p!= NULL)      
   {                
-    printf("%s", p);
+    printf("> %s\n", p);
     splitstr[i] = malloc(strlen(p) + 1);
     if (splitstr[i])
       strcpy(splitstr[i], p);
@@ -77,17 +77,30 @@ int main (int argc, const char * argv[])
     evt.n_tags = tokenize(raw_tags, ",", tags);
     evt.tags = tags;
 
-    char *raw_attrs = "environment=PROD,grid=MyGrid";
+    char raw_attrs[80] = "environment=PROD,grid=MyGrid,location=paris";
 
-    Attribute attrs = ATTRIBUTE__INIT;
-    attrs.key = "foo";
-    attrs.value = "bar";
+    int n_attrs;
+    char *buffer[64] = { NULL };
+
+    n_attrs = tokenize(raw_attrs, ",", buffer);
+    evt.attributes = malloc(sizeof(Attribute) * n_attrs);
+
+    int i;
+    for (i = 0; i < n_attrs; i++) {
+        Attribute attrs = ATTRIBUTE__INIT;
+        printf("buffer[%d] = %s\n", i, buffer[i]);
+        char *a[32] = { NULL };
+        tokenize(buffer[i], "=", a);
+        printf("attributes[%d] -> a[0] = %s a[1] = %s\n", i, a[0], a[1]);
+         attrs.key = strdup(a[0]);
+        attrs.value = strdup(a[1]);
+        evt.attributes[i] = &attrs;
+    }
+    evt.n_attributes = n_attrs;
+    printf("n_attrs = %d\n", n_attrs);
 
     evt.ttl = 86400;
 
-    evt.n_attributes = 1;
-    evt.attributes = malloc(sizeof(Attribute) * evt.n_attributes);
-    evt.attributes[0] = &attrs;
 
     evt.has_metric_sint64 = 1;
     evt.metric_sint64 = 123;
