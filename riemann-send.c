@@ -1,3 +1,11 @@
+/*****************************************************************************
+ *
+ * RIEMANN-SEND.C
+ *
+ *     $ indent -br -nut -l125 riemann-send.c
+ *
+ *****************************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "riemann.pb-c.h"
@@ -9,108 +17,107 @@
 #include <netdb.h>
 
 int
-tokenize(char *str, char *delim, char **splitstr)
-{      
-  char *p;      
-  int i=0;      
+tokenize (char *str, char *delim, char **splitstr)
+{
+  char *p;
+  int i = 0;
 
-  p = strtok(str, delim);      
-  while(p!= NULL)      
-  {                
-    printf("> %s\n", p);
-    splitstr[i] = malloc(strlen(p) + 1);
+  p = strtok (str, delim);
+  while (p != NULL) {
+    printf ("> %s\n", p);
+    splitstr[i] = malloc (strlen (p) + 1);
     if (splitstr[i])
-      strcpy(splitstr[i], p);
+      strcpy (splitstr[i], p);
     i++;
-    p = strtok (NULL, delim);       
-  } 
+    p = strtok (NULL, delim);
+  }
   return i++;
 }
 
-int main (int argc, const char * argv[]) 
+int
+main (int argc, const char *argv[])
 {
-    void *msg_buf;                     // Buffer to store serialized data
-    unsigned len;                  // Length of serialized data
+  void *msg_buf;                // Buffer to store serialized data
+  unsigned len;                 // Length of serialized data
 
-    Event evt = EVENT__INIT;
-    evt.time = 1234567890;
-    evt.state = "ok";
-    evt.service = "service111";
-    evt.host = "myhost";
-    evt.description = "this is the description";
+  Event evt = EVENT__INIT;
+  evt.time = 1234567890;
+  evt.state = "ok";
+  evt.service = "service111";
+  evt.host = "myhost";
+  evt.description = "this is the description";
 
-    // char *tags[] = { "one", "two", "three", NULL };
-    char raw_tags[80] = "cat=dog,length=1,wibble";
-    printf("raw tags = %s\n", raw_tags);
+  // char *tags[] = { "one", "two", "three", NULL };
+  char raw_tags[80] = "cat=dog,length=1,wibble";
+  printf ("raw tags = %s\n", raw_tags);
 
-    int n_tags;
-    char *tags[64] = { NULL };
+  int n_tags;
+  char *tags[64] = { NULL };
 
-    evt.n_tags = tokenize(raw_tags, ",", tags);
-    evt.tags = tags;
+  evt.n_tags = tokenize (raw_tags, ",", tags);
+  evt.tags = tags;
 
-    char raw_attrs[80] = "environment=PROD,grid=MyGrid,location=paris";
+  char raw_attrs[80] = "environment=PROD,grid=MyGrid,location=paris";
 
-    int n_attrs;
-    char *buffer[64] = { NULL };
+  int n_attrs;
+  char *buffer[64] = { NULL };
 
-    n_attrs = tokenize(raw_attrs, ",", buffer);
-
-
-    Attribute **attrs;
-    void *buf;
-    attrs = malloc(sizeof(Attribute *) * n_attrs);
-
-    int i;
-    for (i = 0; i < n_attrs; i++) {
-
-        printf("buffer[%d] = %s\n", i, buffer[i]);
-        char *a[32] = { NULL };
-        tokenize(buffer[i], "=", a);
-        printf("attributes[%d] -> a[0] = %s a[1] = %s\n", i, a[0], a[1]);
-
-        attrs[i] = malloc(sizeof(Attribute));
-        attribute__init(attrs[i]);
-        attrs[i]->key = a[0];
-        attrs[i]->value = a[1];
-    }
-    evt.attributes = attrs;
-    evt.n_attributes = n_attrs;
-    printf("n_attrs = %d\n", n_attrs);
-
-    evt.ttl = 86400;
+  n_attrs = tokenize (raw_attrs, ",", buffer);
 
 
-    evt.has_metric_sint64 = 1;
-    evt.metric_sint64 = 123;
+  Attribute **attrs;
+  void *buf;
+  attrs = malloc (sizeof (Attribute *) * n_attrs);
 
-    Msg riemann_msg = MSG__INIT;
-    riemann_msg.n_events = 1;
-    riemann_msg.events = malloc(sizeof(Event) * riemann_msg.n_events);
-    riemann_msg.events[0] = &evt;
+  int i;
+  for (i = 0; i < n_attrs; i++) {
 
-    len = msg__get_packed_size(&riemann_msg);
-    msg_buf = malloc(len);
-    msg__pack(&riemann_msg,msg_buf);
-        
-    fprintf(stderr,"Writing %d serialized bytes\n",len); // See the length of message
+    printf ("buffer[%d] = %s\n", i, buffer[i]);
+    char *a[32] = { NULL };
+    tokenize (buffer[i], "=", a);
+    printf ("attributes[%d] -> a[0] = %s a[1] = %s\n", i, a[0], a[1]);
 
-   int sockfd,n;
-   struct sockaddr_in servaddr;
+    attrs[i] = malloc (sizeof (Attribute));
+    attribute__init (attrs[i]);
+    attrs[i]->key = a[0];
+    attrs[i]->value = a[1];
+  }
+  evt.attributes = attrs;
+  evt.n_attributes = n_attrs;
+  printf ("n_attrs = %d\n", n_attrs);
 
-   sockfd=socket(AF_INET,SOCK_DGRAM,0);
+  evt.ttl = 86400;
 
-   bzero(&servaddr,sizeof(servaddr));
-   servaddr.sin_family = AF_INET;
-   servaddr.sin_addr.s_addr=inet_addr("127.0.0.1");
-   servaddr.sin_port=htons(5555);
 
-      sendto(sockfd,msg_buf,strlen(msg_buf),0,
-             (struct sockaddr *)&servaddr,sizeof(servaddr));
+  evt.has_metric_sint64 = 1;
+  evt.metric_sint64 = 123;
 
-    free(evt.attributes); // Free the allocated serialized buffer
-    free(evt.tags); // Free the allocated serialized buffer
-    free(msg_buf); // Free the allocated serialized buffer
+  Msg riemann_msg = MSG__INIT;
+  riemann_msg.n_events = 1;
+  riemann_msg.events = malloc (sizeof (Event) * riemann_msg.n_events);
+  riemann_msg.events[0] = &evt;
 
-    return 0;
+  len = msg__get_packed_size (&riemann_msg);
+  msg_buf = malloc (len);
+  msg__pack (&riemann_msg, msg_buf);
+
+  fprintf (stderr, "Writing %d serialized bytes\n", len);       // See the length of message
+
+  int sockfd, n;
+  struct sockaddr_in servaddr;
+
+  sockfd = socket (AF_INET, SOCK_DGRAM, 0);
+
+  bzero (&servaddr, sizeof (servaddr));
+  servaddr.sin_family = AF_INET;
+  servaddr.sin_addr.s_addr = inet_addr ("127.0.0.1");
+  servaddr.sin_port = htons (5555);
+
+  sendto (sockfd, msg_buf, strlen (msg_buf), 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
+
+  free (evt.attributes);        // Free the allocated serialized buffer
+  free (evt.tags);              // Free the allocated serialized buffer
+  free (msg_buf);               // Free the allocated serialized buffer
+
+  return 0;
 }
