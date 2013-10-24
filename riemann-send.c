@@ -39,10 +39,9 @@ tokenize (char *str, char *delim, char **tokens)
 int
 main (int argc, const char *argv[])
 {
-  void *buf;                // Buffer to store serialized data
-  unsigned len;                 // Length of serialized data
 
   Event evt = EVENT__INIT;
+
   evt.time = 1234567890;
   evt.state = "ok";
   evt.service = "service111";
@@ -51,7 +50,7 @@ main (int argc, const char *argv[])
 
   // char *tags[] = { "one", "two", "three", NULL };
   char raw_tags[80] = "cat=dog,length=1,wibble";
-  printf ("raw tags = %s\n", raw_tags);
+  // printf ("raw tags = %s\n", raw_tags);
 
   int n_tags;
   char *tags[64] = { NULL };
@@ -89,18 +88,20 @@ main (int argc, const char *argv[])
 
   evt.ttl = 86400;
 
-
   evt.has_metric_sint64 = 1;
   evt.metric_sint64 = 123;
 
   Msg riemann_msg = MSG__INIT;
+  void *buf;
+  unsigned len;
+
   riemann_msg.n_events = 1;
-  riemann_msg.events = malloc (sizeof (Event) * riemann_msg.n_events);
+  riemann_msg.events = malloc(sizeof (Event) * riemann_msg.n_events);
   riemann_msg.events[0] = &evt;
 
-  len = msg__get_packed_size (&riemann_msg);
-  buf = malloc (len);
-  msg__pack (&riemann_msg, buf);
+  len = msg__get_packed_size(&riemann_msg);
+  buf = malloc(len);
+  msg__pack(&riemann_msg, buf);
 
   fprintf (stderr, "Writing %d serialized bytes\n", len);       // See the length of message
 
