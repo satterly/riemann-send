@@ -17,7 +17,7 @@
 #include <netdb.h>
 
 int
-tokenize (char *str, char *delim, char **splitstr)
+tokenize (char *str, char *delim, char **tokens)
 {
   char *p;
   int i = 0;
@@ -25,9 +25,9 @@ tokenize (char *str, char *delim, char **splitstr)
   p = strtok (str, delim);
   while (p != NULL) {
     printf ("> %s\n", p);
-    splitstr[i] = malloc (strlen (p) + 1);
-    if (splitstr[i])
-      strcpy (splitstr[i], p);
+    tokens[i] = malloc (strlen (p) + 1);
+    if (tokens[i])
+      strcpy (tokens[i], p);
     i++;
     p = strtok (NULL, delim);
   }
