@@ -8,6 +8,25 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+int
+tokenize(char *str, char *delim, char **splitstr)
+{      
+  char *p;      
+  int i=0;      
+
+  p = strtok(str, delim);      
+  while(p!= NULL)      
+  {                
+    printf("%s", p);
+    splitstr[i] = malloc(strlen(p) + 1);
+    if (splitstr[i])
+      strcpy(splitstr[i], p);
+    i++;
+    p = strtok (NULL, delim);       
+  } 
+  return i++;
+}
+
 int main (int argc, const char * argv[]) 
 {
 //    AMessage msg = AMESSAGE__INIT; // AMessage
@@ -31,15 +50,39 @@ int main (int argc, const char * argv[])
     evt.host = "myhost";
     evt.description = "this is the description";
 
-    char *tags[] = { "one", "two", "three", NULL };
-    // char *attrs[] =  { "foo=bar", "qux=xyz", NULL };
+    // char *tags[] = { "one", "two", "three", NULL };
+    char raw_tags[80] = "cat=dog,length=1,wibble";
+    printf("raw tags = %s\n", raw_tags);
+
+   /*
+    int n_tags = 0;
+    char *token;
+
+    token = strtok(raw_tags, ",");
+    if (token) {
+        printf("tag %d %s\n", n_tags, token); 
+        char *tags = malloc(sizeof(token));
+        
+        for (n_tags = 1; token = strtok(NULL, ","); n_tags++ ) {
+           printf("tags %d %s\n", n_tags, token); 
+    
+        }
+    }
+    evt.n_tags = n_tags++;
+    evt.tags =  tags;
+ */
+    int n_tags;
+    char *tags[64] = { NULL };
+
+    evt.n_tags = tokenize(raw_tags, ",", tags);
+    evt.tags = tags;
+
+    char *raw_attrs = "environment=PROD,grid=MyGrid";
 
     Attribute attrs = ATTRIBUTE__INIT;
     attrs.key = "foo";
     attrs.value = "bar";
 
-    evt.n_tags = 3;
-    evt.tags =  tags;
     evt.ttl = 86400;
 
     evt.n_attributes = 1;
