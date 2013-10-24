@@ -49,22 +49,23 @@ main (int argc, const char *argv[])
   evt.description = "this is the description";
 
   // char *tags[] = { "one", "two", "three", NULL };
-  char raw_tags[80] = "cat=dog,length=1,wibble";
+  char raw_tags[80] = "cat,foo=bar,yes=yay!";
   // printf ("raw tags = %s\n", raw_tags);
 
   int n_tags;
-  char *tags[64] = { NULL };
+  char *tags[1024] = { NULL };
 
   evt.n_tags = tokenize (raw_tags, ",", tags);
   evt.tags = tags;
 
+
+/*
   char raw_attrs[80] = "environment=PROD,grid=MyGrid,location=paris";
 
   int n_attrs;
   char *buffer[64] = { NULL };
 
   n_attrs = tokenize (raw_attrs, ",", buffer);
-
 
   Attribute **attrs;
   attrs = malloc (sizeof (Attribute *) * n_attrs);
@@ -85,7 +86,7 @@ main (int argc, const char *argv[])
   evt.attributes = attrs;
   evt.n_attributes = n_attrs;
   printf ("n_attrs = %d\n", n_attrs);
-
+*/
   evt.ttl = 86400;
 
   evt.has_metric_sint64 = 1;
@@ -103,6 +104,11 @@ main (int argc, const char *argv[])
   buf = malloc(len);
   msg__pack(&riemann_msg, buf);
 
+  int i;
+  for (i = 0; i < evt.n_tags; i++) {
+     printf("tag %d %s\n", i, tags[i]);
+     free(tags[i]);
+  }
   fprintf (stderr, "Writing %d serialized bytes\n", len);       // See the length of message
 
   int sockfd, n;
@@ -120,13 +126,11 @@ main (int argc, const char *argv[])
   for (i = 0; i < n_attrs; i++)
       free(attrs[i]);
   free(attrs);
-  for (i = 0; i < n_tags; i++)
-      free(tags[i]);
   free(evt.tags);
   free(riemann_msg.events);
 */
+  // free(attrs);
 
-  free(attrs);
   free(riemann_msg.events);
   free(buf);
 
