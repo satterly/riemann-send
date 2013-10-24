@@ -29,21 +29,10 @@ tokenize(char *str, char *delim, char **splitstr)
 
 int main (int argc, const char * argv[]) 
 {
-//    AMessage msg = AMESSAGE__INIT; // AMessage
     void *msg_buf;                     // Buffer to store serialized data
     unsigned len;                  // Length of serialized data
- /*       
-    if (argc != 2 && argc != 3)
-    {   // Allow one or two integers
-        fprintf(stderr,"usage: amessage a [b]\n");
-        return 1;
-    }
-*/
-    /* msg.a = atoi(argv[1]);
-     if (argc == 3) { msg.has_b = 1; msg.b = atoi(argv[2]); }
-     len = amessage__get_packed_size(&msg); */
 
-    Event evt = EVENT__INIT; // AMessage
+    Event evt = EVENT__INIT;
     evt.time = 1234567890;
     evt.state = "ok";
     evt.service = "service111";
@@ -54,23 +43,6 @@ int main (int argc, const char * argv[])
     char raw_tags[80] = "cat=dog,length=1,wibble";
     printf("raw tags = %s\n", raw_tags);
 
-   /*
-    int n_tags = 0;
-    char *token;
-
-    token = strtok(raw_tags, ",");
-    if (token) {
-        printf("tag %d %s\n", n_tags, token); 
-        char *tags = malloc(sizeof(token));
-        
-        for (n_tags = 1; token = strtok(NULL, ","); n_tags++ ) {
-           printf("tags %d %s\n", n_tags, token); 
-    
-        }
-    }
-    evt.n_tags = n_tags++;
-    evt.tags =  tags;
- */
     int n_tags;
     char *tags[64] = { NULL };
 
@@ -83,19 +55,26 @@ int main (int argc, const char * argv[])
     char *buffer[64] = { NULL };
 
     n_attrs = tokenize(raw_attrs, ",", buffer);
-    evt.attributes = malloc(sizeof(Attribute) * n_attrs);
+
+
+    Attribute **attrs;
+    void *buf;
+    attrs = malloc(sizeof(Attribute *) * n_attrs);
 
     int i;
     for (i = 0; i < n_attrs; i++) {
-        Attribute attrs = ATTRIBUTE__INIT;
+
         printf("buffer[%d] = %s\n", i, buffer[i]);
         char *a[32] = { NULL };
         tokenize(buffer[i], "=", a);
         printf("attributes[%d] -> a[0] = %s a[1] = %s\n", i, a[0], a[1]);
-         attrs.key = strdup(a[0]);
-        attrs.value = strdup(a[1]);
-        evt.attributes[i] = &attrs;
+
+        attrs[i] = malloc(sizeof(Attribute));
+        attribute__init(attrs[i]);
+        attrs[i]->key = a[0];
+        attrs[i]->value = a[1];
     }
+    evt.attributes = attrs;
     evt.n_attributes = n_attrs;
     printf("n_attrs = %d\n", n_attrs);
 
@@ -115,36 +94,6 @@ int main (int argc, const char * argv[])
     msg__pack(&riemann_msg,msg_buf);
         
     fprintf(stderr,"Writing %d serialized bytes\n",len); // See the length of message
-    // fwrite(msg_buf,len,1,stdout); // Write to stdout to allow direct command line piping
-/*
-
-   int sockfd;
-   struct sockaddr_in *sa_in;
-   struct hostent *hostinfo;
-
-   sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-   if (sockfd < 0)
-      {
-         // fprintf(stderr, "create socket (client) %s", strerror(errno));
-         return 1;
-      }
-   memset(&sa_in, 0, sizeof(sa_in));
-   sa_in->sin_family = AF_INET;
-   sa_in->sin_port = htons (5555);
-   hostinfo = gethostbyname ("localhost");
-   sa_in->sin_addr = *(struct in_addr *) hostinfo->h_addr;
-
-      int nbytes;
-
-      nbytes = sendto (sockfd, msg_buf, strlen(msg_buf), 0,
-                         // (struct sockaddr_in*)&sa_in, sizeof (struct sockaddr_in));
-                         (const struct sockaddr *)&sa_in, sizeof (struct sockaddr_in));
-
-      if (nbytes != strlen(msg_buf))
-      {
-             fprintf(stderr, "sendto socket (client): %s", strerror(errno));
-      }
-*/
 
    int sockfd,n;
    struct sockaddr_in servaddr;
@@ -159,6 +108,9 @@ int main (int argc, const char * argv[])
       sendto(sockfd,msg_buf,strlen(msg_buf),0,
              (struct sockaddr *)&servaddr,sizeof(servaddr));
 
+    free(evt.attributes); // Free the allocated serialized buffer
+    free(evt.tags); // Free the allocated serialized buffer
     free(msg_buf); // Free the allocated serialized buffer
+
     return 0;
 }
