@@ -11,7 +11,6 @@
 int main (int argc, const char * argv[]) 
 {
 //    AMessage msg = AMESSAGE__INIT; // AMessage
-    void *evt_buf;                     // Buffer to store serialized data
     void *msg_buf;                     // Buffer to store serialized data
     unsigned len;                  // Length of serialized data
  /*       
@@ -49,10 +48,6 @@ int main (int argc, const char * argv[])
 
     evt.has_metric_sint64 = 1;
     evt.metric_sint64 = 123;
-
-    len = event__get_packed_size(&evt);
-    evt_buf = malloc(len);
-    event__pack(&evt,evt_buf);
 
     Msg riemann_msg = MSG__INIT;
     riemann_msg.n_events = 1;
@@ -109,6 +104,5 @@ int main (int argc, const char * argv[])
              (struct sockaddr *)&servaddr,sizeof(servaddr));
 
     free(msg_buf); // Free the allocated serialized buffer
-    free(evt_buf); // Free the allocated serialized buffer
     return 0;
 }
