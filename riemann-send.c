@@ -2,7 +2,9 @@
  *
  * RIEMANN-SEND.C
  *
- *     $ indent -br -nut -l125 riemann-send.c
+ *    $ indent -br -nut -l125 riemann-send.c
+ *
+ *    $ gcc -o riemann-send riemann-send.c riemann.pb-c.c -lprotobuf-c
  *
  *****************************************************************************/
 
@@ -37,7 +39,7 @@ tokenize (char *str, char *delim, char **tokens)
 int
 main (int argc, const char *argv[])
 {
-  void *msg_buf;                // Buffer to store serialized data
+  void *buf;                // Buffer to store serialized data
   unsigned len;                 // Length of serialized data
 
   Event evt = EVENT__INIT;
@@ -66,7 +68,6 @@ main (int argc, const char *argv[])
 
 
   Attribute **attrs;
-  void *buf;
   attrs = malloc (sizeof (Attribute *) * n_attrs);
 
   int i;
@@ -98,8 +99,8 @@ main (int argc, const char *argv[])
   riemann_msg.events[0] = &evt;
 
   len = msg__get_packed_size (&riemann_msg);
-  msg_buf = malloc (len);
-  msg__pack (&riemann_msg, msg_buf);
+  buf = malloc (len);
+  msg__pack (&riemann_msg, buf);
 
   fprintf (stderr, "Writing %d serialized bytes\n", len);       // See the length of message
 
@@ -113,11 +114,11 @@ main (int argc, const char *argv[])
   servaddr.sin_addr.s_addr = inet_addr ("127.0.0.1");
   servaddr.sin_port = htons (5555);
 
-  sendto (sockfd, msg_buf, strlen (msg_buf), 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
+  sendto (sockfd, buf, strlen (buf), 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
 
   free (evt.attributes);        // Free the allocated serialized buffer
   free (evt.tags);              // Free the allocated serialized buffer
-  free (msg_buf);               // Free the allocated serialized buffer
+  free (buf);               // Free the allocated serialized buffer
 
   return 0;
 }
