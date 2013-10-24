@@ -58,9 +58,7 @@ main (int argc, const char *argv[])
   evt.n_tags = tokenize (raw_tags, ",", tags);
   evt.tags = tags;
 
-
-/*
-  char raw_attrs[80] = "environment=PROD,grid=MyGrid,location=paris";
+  char raw_attrs[80] = "env=PROD,grid=MyGrid,location=paris,foo=bar";
 
   int n_attrs;
   char *buffer[64] = { NULL };
@@ -74,19 +72,21 @@ main (int argc, const char *argv[])
   for (i = 0; i < n_attrs; i++) {
 
     printf ("buffer[%d] = %s\n", i, buffer[i]);
-    char *a[32] = { NULL };
-    tokenize (buffer[i], "=", a);
-    printf ("attributes[%d] -> a[0] = %s a[1] = %s\n", i, a[0], a[1]);
+    char *pair[1] = { NULL };
+    tokenize (buffer[i], "=", pair);
+    printf ("attributes[%d] -> key = %s value = %s\n", i, pair[0], pair[1]);
 
     attrs[i] = malloc (sizeof (Attribute));
     attribute__init (attrs[i]);
-    attrs[i]->key = strdup(a[0]);
-    attrs[i]->value = strdup(a[1]);
+    attrs[i]->key = pair[0];
+    attrs[i]->value = pair[1];
+    free(pair[0]);
+    free(pair[1]);
   }
   evt.attributes = attrs;
   evt.n_attributes = n_attrs;
   printf ("n_attrs = %d\n", n_attrs);
-*/
+
   evt.ttl = 86400;
 
   evt.has_metric_sint64 = 1;
@@ -104,7 +104,6 @@ main (int argc, const char *argv[])
   buf = malloc(len);
   msg__pack(&riemann_msg, buf);
 
-  int i;
   for (i = 0; i < evt.n_tags; i++) {
      printf("tag %d %s\n", i, tags[i]);
      free(tags[i]);
@@ -122,15 +121,13 @@ main (int argc, const char *argv[])
   servaddr.sin_port = htons (5555);
 
   sendto (sockfd, buf, strlen (buf), 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
-/*
-  for (i = 0; i < n_attrs; i++)
-      free(attrs[i]);
-  free(attrs);
-  free(evt.tags);
-  free(riemann_msg.events);
-*/
-  // free(attrs);
 
+  for (i = 0; i < evt.n_attributes; i++) {
+      attrs[i]->key = NULL;
+      attrs[i]->value = NULL;
+      free(attrs[i]);
+  }
+  free(attrs);
   free(riemann_msg.events);
   free(buf);
 
