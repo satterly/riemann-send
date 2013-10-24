@@ -79,8 +79,8 @@ main (int argc, const char *argv[])
 
     attrs[i] = malloc (sizeof (Attribute));
     attribute__init (attrs[i]);
-    attrs[i]->key = a[0];
-    attrs[i]->value = a[1];
+    attrs[i]->key = strdup(a[0]);
+    attrs[i]->value = strdup(a[1]);
   }
   evt.attributes = attrs;
   evt.n_attributes = n_attrs;
@@ -116,10 +116,19 @@ main (int argc, const char *argv[])
   servaddr.sin_port = htons (5555);
 
   sendto (sockfd, buf, strlen (buf), 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
+/*
+  for (i = 0; i < n_attrs; i++)
+      free(attrs[i]);
+  free(attrs);
+  for (i = 0; i < n_tags; i++)
+      free(tags[i]);
+  free(evt.tags);
+  free(riemann_msg.events);
+*/
 
-  free (evt.attributes);        // Free the allocated serialized buffer
-  free (evt.tags);              // Free the allocated serialized buffer
-  free (buf);               // Free the allocated serialized buffer
+  free(attrs);
+  free(riemann_msg.events);
+  free(buf);
 
   return 0;
 }
