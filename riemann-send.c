@@ -82,6 +82,7 @@ main (int argc, const char *argv[])
     attrs[i]->value = pair[1];
     free(pair[0]);
     free(pair[1]);
+    free(buffer[i]);
   }
   evt.attributes = attrs;
   evt.n_attributes = n_attrs;
