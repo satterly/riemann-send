@@ -121,7 +121,7 @@ main (int argc, const char *argv[])
   servaddr.sin_addr.s_addr = inet_addr ("127.0.0.1");
   servaddr.sin_port = htons (5555);
 
-  sendto (sockfd, buf, strlen (buf), 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
+  sendto (sockfd, buf, len, 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
 
   for (i = 0; i < evt.n_attributes; i++) {
       attrs[i]->key = NULL;
