@@ -7,8 +7,10 @@ Installation
     $ git clone https://github.com/satterly/riemann-send.git
     $ cd riemann-send
     $ sudo apt-get install protobuf-c-compiler libprotobuf-c0-dev
-    $ protoc-c --c_out=. riemann.proto
-    $ gcc -g -o riemann-send riemann.pb-c.c riemann-send.c -lprotobuf-c
+    $ ./bootstrap
+    $ ./configure
+    $ make
+    $ make install
 
 Example
 -------
