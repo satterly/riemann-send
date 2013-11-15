@@ -24,7 +24,7 @@
 int done = 0;
 
 char *riemann_server = "localhost";
-char *riemann_protocol = "tcp";
+char *riemann_protocol = "udp";
 int riemann_port = 5555;
 int riemann_is_available = 0;
 
@@ -184,7 +184,7 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
 static void *APR_THREAD_FUNC
 circuit_breaker (apr_thread_t * thd, void *data)
 {
-  int rc = 1;
+  int rc = 0;
 
   printf ("[cb] start...\n");
 
@@ -198,6 +198,8 @@ circuit_breaker (apr_thread_t * thd, void *data)
       riemann_is_available = 1; /* UP */
       // riemann_close();
     }
+    printf ("[cb] riemann is %s\n", riemann_is_available ? "UP" : "DOWN");
+
     apr_sleep (15 * 1000 * 1000);
   }
   apr_thread_exit (thd, APR_SUCCESS);
@@ -227,6 +229,8 @@ main (int argc, const char *argv[])
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = inet_addr ("127.0.0.1");
     servaddr.sin_port = htons (5555);
+
+    riemann_is_available = 1;
   }
   else {
     /* riemann_connect() */
