@@ -18,6 +18,9 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+#include <apr.h>
+#include <apr_thread_proc.h>
+
 int
 tokenize (char *str, char *delim, char **tokens)
 {
