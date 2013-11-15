@@ -193,6 +193,19 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
     else {
       printf ("[riemann] Sending metric via TCP...");
       nbytes = send (riemann_tcp_socket, buf, len, 0);
+
+      Msg *msg;
+      uint32_t header, len;
+      uint8_t *buffer;
+      ssize_t response;
+
+      response = recv (riemann_tcp_socket, &header, sizeof(header), 0);
+      len = ntohl(header);
+      buffer = malloc(len);
+      response = recv (riemann_tcp_socket, buffer, len, 0);
+      msg = msg__unpack(NULL, len, buffer);
+      printf("ok %d\n", msg->ok);
+
     }
 
     if (nbytes != len) {
