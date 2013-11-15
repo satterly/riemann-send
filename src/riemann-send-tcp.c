@@ -27,10 +27,15 @@ int done = 0;
 #define RIEMANN_CB_HALF_OPEN 1
 #define RIEMANN_CB_CLOSED 2
 
+#define RIEMANN_TIMEOUT 60
+#define RIEMANN_MAX_FAILURES 5
+
 char *riemann_server = "localhost";
 char *riemann_protocol = "tcp";
 int riemann_port = 5555;
 int riemann_circuit_breaker = RIEMANN_CB_CLOSED;
+int riemann_reset_timeout = 0;
+int riemann_failures = 0;
 
 int sockfd;
 struct sockaddr_in servaddr;
@@ -159,7 +164,7 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
     if (nbytes != len) {
       fprintf (stderr, "[riemann] sendto socket (client): %s\n", strerror (errno));
       riemann_failures++;
-      if (riemann_failures > riemann_max_failures) {
+      if (riemann_failures > RIEMANN_MAX_FAILURES) {
         riemann_circuit_breaker = RIEMANN_CB_OPEN;
         riemann_reset_timeout = apr_time_now () + RIEMANN_TIMEOUT;      /* 60 seconds */
       }
@@ -170,7 +175,7 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
       printf ("[riemann] Sent %d serialized bytes\n", len);
     }
   }
-  else if (riremann_circuit_breaker == RIEMANN_CB_OPEN) {
+  else if (riemann_circuit_breaker == RIEMANN_CB_OPEN) {
     printf ("[riemann] Circuit breaker OPEN... Not sending metric via TCP! Riemann DOWN!!!\n");
   }
 
@@ -204,7 +209,8 @@ circuit_breaker (apr_thread_t * thd, void *data)
       printf ("Reset period expired, retry connection...\n");
       riemann_circuit_breaker = RIEMANN_CB_HALF_OPEN;
       /* retry connection */
-      if (success) {
+      if (1) {
+        riemann_failures = 0;
         riemann_circuit_breaker = RIEMANN_CB_CLOSED;
       }
       else {
