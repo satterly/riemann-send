@@ -28,6 +28,9 @@ char *riemann_protocol = "tcp";
 int riemann_port = 5555;
 int riemann_is_available = 0;
 
+int sockfd;
+struct sockaddr_in servaddr;
+
 int
 tokenize (char *str, char *delim, char **tokens)
 {
@@ -138,32 +141,27 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
           ", description=%s, ttl=%f, tags(%zu), attributes(%zu)\n", evt.time, evt.host, evt.service, evt.state, evt.metric_f,
           evt.metric_d, evt.metric_sint64, evt.description, evt.ttl, evt.n_tags, evt.n_attributes);
 
-  int sockfd, nbytes;
+  int nbytes = 0;
 
-  if (!strcmp (riemann_protocol, "udp")) {
-    struct sockaddr_in servaddr;
-    sockfd = socket (AF_INET, SOCK_DGRAM, 0);
+  if (riemann_is_available) {
+    if (!strcmp (riemann_protocol, "udp")) {
+      nbytes = sendto (sockfd, buf, len, 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
+    }
+    else {
+      printf ("[riemann] Sending metric via TCP...");
+      nbytes = send (sockfd, buf, len, 0);
+    }
 
-    bzero (&servaddr, sizeof (servaddr));
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = inet_addr ("127.0.0.1");
-    servaddr.sin_port = htons (5555);
-
-    nbytes = sendto (sockfd, buf, len, 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
-
+    if (nbytes != len) {
+      fprintf (stderr, "[riemann] sendto socket (client): %s\n", strerror (errno));
+      return EXIT_FAILURE;
+    }
+    else {
+      printf ("[riemann] Sent %d serialized bytes\n", len);
+    }
   }
   else {
-
-    printf ("send tcp\n");
-
-  }
-
-  if (nbytes != len) {
-    fprintf (stderr, "[riemann] sendto socket (client): %s\n", strerror (errno));
-    return EXIT_FAILURE;
-  }
-  else {
-    printf ("[riemann] Sent %d serialized bytes\n", len);
+    printf ("[riemann] Not sending metric via TCP! Riemann DOWN!!!\n");
   }
 
   for (i = 0; i < evt.n_attributes; i++) {
@@ -221,6 +219,18 @@ main (int argc, const char *argv[])
   apr_thread_t *thread;
   if (apr_thread_create (&thread, NULL, circuit_breaker, NULL, mp) != APR_SUCCESS)
     perror ("Failed to create thread. Exiting.\n");
+
+  if (!strcmp (riemann_protocol, "udp")) {
+    sockfd = socket (AF_INET, SOCK_DGRAM, 0);
+
+    bzero (&servaddr, sizeof (servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = inet_addr ("127.0.0.1");
+    servaddr.sin_port = htons (5555);
+  }
+  else {
+    /* riemann_connect() */
+  }
 
   for (; !done;) {
 
