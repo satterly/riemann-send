@@ -2,9 +2,9 @@
  *
  * RIEMANN-SEND-TCP.C
  *
- *    $ indent -br -nut -l125 riemann-send.c
+ *    $ indent -br -nut -l125 riemann-send-tcp.c
  *
- *    $ gcc -o riemann-send riemann-send.c riemann.pb-c.c -lprotobuf-c
+ *    $ gcc -o riemann-send-tcp riemann-send-tcp.c riemann.pb-c.c $(apr-1-config --cflags --cppflags --includes --link-ld) -lprotobuf-c
  *
  *****************************************************************************/
 
@@ -18,8 +18,11 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
-#include <apr.h>
+#include <apr_general.h>
 #include <apr_thread_proc.h>
+
+int done = 0;
+int riemann_is_available = 0;
 
 int
 tokenize (char *str, char *delim, char **tokens)
@@ -39,9 +42,44 @@ tokenize (char *str, char *delim, char **tokens)
   return i++;
 }
 
+static void *APR_THREAD_FUNC
+circuit_breaker (apr_thread_t * thd, void *data)
+{
+  int rc = 1;
+
+  printf ("[cb] start...\n");
+
+  for (; !done;) {
+    // rc = riemann_connect("localhost", 5555);
+    if (rc == 1) {
+      riemann_is_available = 0; /* DOWN */
+    }
+    else {
+      riemann_is_available = 1; /* UP */
+      // riemann_close();
+    }
+    apr_sleep (15);
+  }
+  apr_thread_exit (thd, APR_SUCCESS);
+
+  return NULL;
+}
+
 int
 main (int argc, const char *argv[])
 {
+
+  apr_status_t rv;
+  apr_pool_t *mp;
+
+  apr_initialize ();
+  atexit (apr_terminate);
+
+  apr_pool_create (&mp, NULL);
+
+  apr_thread_t *thread;
+  if (apr_thread_create (&thread, NULL, circuit_breaker, NULL, mp) != APR_SUCCESS)
+    perror ("Failed to create thread. Exiting.\n");
 
   Event evt = EVENT__INIT;
 
@@ -83,9 +121,9 @@ main (int argc, const char *argv[])
     attribute__init (attrs[i]);
     attrs[i]->key = pair[0];
     attrs[i]->value = pair[1];
-    free(pair[0]);
-    free(pair[1]);
-    free(buffer[i]);
+    free (pair[0]);
+    free (pair[1]);
+    free (buffer[i]);
   }
   evt.attributes = attrs;
   evt.n_attributes = n_attrs;
@@ -101,16 +139,16 @@ main (int argc, const char *argv[])
   unsigned len;
 
   riemann_msg.n_events = 1;
-  riemann_msg.events = malloc(sizeof (Event) * riemann_msg.n_events);
+  riemann_msg.events = malloc (sizeof (Event) * riemann_msg.n_events);
   riemann_msg.events[0] = &evt;
 
-  len = msg__get_packed_size(&riemann_msg);
-  buf = malloc(len);
-  msg__pack(&riemann_msg, buf);
+  len = msg__get_packed_size (&riemann_msg);
+  buf = malloc (len);
+  msg__pack (&riemann_msg, buf);
 
   for (i = 0; i < evt.n_tags; i++) {
-     printf("tag %d %s\n", i, tags[i]);
-     free(tags[i]);
+    printf ("tag %d %s\n", i, tags[i]);
+    free (tags[i]);
   }
   fprintf (stderr, "Writing %d serialized bytes\n", len);       // See the length of message
 
@@ -127,13 +165,13 @@ main (int argc, const char *argv[])
   sendto (sockfd, buf, len, 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
 
   for (i = 0; i < evt.n_attributes; i++) {
-      attrs[i]->key = NULL;
-      attrs[i]->value = NULL;
-      free(attrs[i]);
+    attrs[i]->key = NULL;
+    attrs[i]->value = NULL;
+    free (attrs[i]);
   }
-  free(attrs);
-  free(riemann_msg.events);
-  free(buf);
+  free (attrs);
+  free (riemann_msg.events);
+  free (buf);
 
   return 0;
 }
