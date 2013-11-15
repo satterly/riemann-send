@@ -30,15 +30,49 @@ int done = 0;
 #define RIEMANN_TIMEOUT 60
 #define RIEMANN_MAX_FAILURES 5
 
-char *riemann_server = "localhost";
+char *riemann_server = "127.0.0.1";
 char *riemann_protocol = "tcp";
 int riemann_port = 5555;
 int riemann_circuit_breaker = RIEMANN_CB_CLOSED;
 int riemann_reset_timeout = 0;
 int riemann_failures = 0;
 
-int sockfd;
+int riemann_tcp_socket;
 struct sockaddr_in servaddr;
+
+int
+riemann_connect (const char *server, int port)
+{
+  printf ("Connecting to %s:%d\n", server, port);
+
+  int sockfd = socket (AF_INET, SOCK_STREAM, 0);
+  if (sockfd < 0) {
+    perror ("Could not open socket");
+    return -1;
+  }
+  else {
+    printf ("Socket created!\n");
+  }
+
+  struct sockaddr_in remote_addr = { };
+  remote_addr.sin_family = AF_INET;
+  remote_addr.sin_port = htons (port);
+
+  if (inet_aton (server, &remote_addr.sin_addr) <= 0) {
+    perror ("inet_aton failed");
+    return -1;
+  }
+
+  if (connect (sockfd, (struct sockaddr *) &remote_addr, sizeof (remote_addr)) < 0) {
+    perror ("Connect failed");
+    return -1;
+  }
+  else {
+    printf ("Connected to %s:%d\n", server, port);
+  }
+  return sockfd;
+}
+
 
 int
 tokenize (char *str, char *delim, char **tokens)
@@ -154,11 +188,11 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
 
   if (riemann_circuit_breaker == RIEMANN_CB_CLOSED) {
     if (!strcmp (riemann_protocol, "udp")) {
-      nbytes = sendto (sockfd, buf, len, 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
+      nbytes = sendto (riemann_tcp_socket, buf, len, 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
     }
     else {
       printf ("[riemann] Sending metric via TCP...");
-      nbytes = send (sockfd, buf, len, 0);
+      nbytes = send (riemann_tcp_socket, buf, len, 0);
     }
 
     if (nbytes != len) {
@@ -209,13 +243,14 @@ circuit_breaker (apr_thread_t * thd, void *data)
       printf ("Reset period expired, retry connection...\n");
       riemann_circuit_breaker = RIEMANN_CB_HALF_OPEN;
       /* retry connection */
-      if (1) {
-        riemann_failures = 0;
-        riemann_circuit_breaker = RIEMANN_CB_CLOSED;
-      }
-      else {
+      riemann_tcp_socket = riemann_connect (riemann_server, riemann_port);
+      if (riemann_tcp_socket < 0) {
         riemann_circuit_breaker = RIEMANN_CB_OPEN;
         riemann_reset_timeout = apr_time_now () + RIEMANN_TIMEOUT;      /* 60 seconds */
+      }
+      else {
+        riemann_failures = 0;
+        riemann_circuit_breaker = RIEMANN_CB_CLOSED;
       }
     }
 
@@ -232,14 +267,10 @@ circuit_breaker (apr_thread_t * thd, void *data)
 }
 
 int
-riemann_connect (const char *hostname, uint16_t port)
-{
-  return 0;
-}
-
-int
 main (int argc, const char *argv[])
 {
+  signal (SIGPIPE, SIG_IGN);
+
   apr_status_t rv;
   apr_pool_t *mp;
 
@@ -253,7 +284,10 @@ main (int argc, const char *argv[])
     perror ("Failed to create thread. Exiting.\n");
 
   if (!strcmp (riemann_protocol, "udp")) {
-    sockfd = socket (AF_INET, SOCK_DGRAM, 0);
+
+    printf ("[riemann] set up UDP connection...\n");
+
+    riemann_tcp_socket = socket (AF_INET, SOCK_DGRAM, 0);
 
     bzero (&servaddr, sizeof (servaddr));
     servaddr.sin_family = AF_INET;
@@ -263,7 +297,16 @@ main (int argc, const char *argv[])
     riemann_circuit_breaker = RIEMANN_CB_CLOSED;
   }
   else {
-    riemann_connect (riemann_server, riemann_port);
+    printf ("[riemann] set up TCP connection...\n");
+    riemann_tcp_socket = riemann_connect (riemann_server, riemann_port);
+    if (riemann_tcp_socket < 0) {
+      printf ("[riemann] circuit breaker OPEN...\n");
+      riemann_circuit_breaker = RIEMANN_CB_OPEN;
+    }
+    else {
+      printf ("[riemann] circuit breaker CLOSED...\n");
+      riemann_circuit_breaker = RIEMANN_CB_CLOSED;
+    }
   }
 
   for (; !done;) {
