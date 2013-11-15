@@ -158,14 +158,20 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
 
     if (nbytes != len) {
       fprintf (stderr, "[riemann] sendto socket (client): %s\n", strerror (errno));
+      riemann_failures++;
+      if (riemann_failures > riemann_max_failures) {
+        riemann_circuit_breaker = RIEMANN_CB_OPEN;
+        riemann_reset_timeout = apr_time_now () + RIEMANN_TIMEOUT;      /* 60 seconds */
+      }
       return EXIT_FAILURE;
     }
     else {
+      riemann_failures = 0;
       printf ("[riemann] Sent %d serialized bytes\n", len);
     }
   }
-  else {
-    printf ("[riemann] Circuit breaker ON... Not sending metric via TCP! Riemann DOWN!!!\n");
+  else if (riremann_circuit_breaker == RIEMANN_CB_OPEN) {
+    printf ("[riemann] Circuit breaker OPEN... Not sending metric via TCP! Riemann DOWN!!!\n");
   }
 
   for (i = 0; i < evt.n_attributes; i++) {
@@ -193,21 +199,24 @@ circuit_breaker (apr_thread_t * thd, void *data)
   printf ("[cb] start...\n");
 
   for (; !done;) {
-    printf ("[cb] checking connection...\n");
-    // rc = riemann_connect(riemann_server, riemann_port);
-    if (rc == 1) {
-      riemann_circuit_breaker = RIEMANN_CB_OPEN; /* DOWN */
-    }
-    else {
-      riemann_circuit_breaker = RIEMANN_CB_CLOSED; /* UP */
-      // riemann_close();
-    }
-    printf ("[cb] riemann is %s\n",
-      riemann_circuit_breaker == RIEMANN_CB_OPEN      ? "OPEN" :
-      riemann_circuit_breaker == RIEMANN_CB_HALF_OPEN ? "HALF_OPEN"
-                              /* RIEMANN_CB_CLOSED */ : "CLOSED"
 
-);
+    if (riemann_circuit_breaker == RIEMANN_CB_OPEN && riemann_reset_timeout < apr_time_now ()) {
+      printf ("Reset period expired, retry connection...\n");
+      riemann_circuit_breaker = RIEMANN_CB_HALF_OPEN;
+      /* retry connection */
+      if (success) {
+        riemann_circuit_breaker = RIEMANN_CB_CLOSED;
+      }
+      else {
+        riemann_circuit_breaker = RIEMANN_CB_OPEN;
+        riemann_reset_timeout = apr_time_now () + RIEMANN_TIMEOUT;      /* 60 seconds */
+      }
+    }
+
+    printf ("[cb] riemann is %s\n",
+            riemann_circuit_breaker == RIEMANN_CB_OPEN ? "OPEN" :
+            riemann_circuit_breaker == RIEMANN_CB_HALF_OPEN ? "HALF_OPEN"
+            /* RIEMANN_CB_CLOSED */ : "CLOSED");
 
     apr_sleep (15 * 1000 * 1000);
   }
@@ -217,7 +226,7 @@ circuit_breaker (apr_thread_t * thd, void *data)
 }
 
 int
-riemann_connect(const char *hostname, uint16_t port)
+riemann_connect (const char *hostname, uint16_t port)
 {
   return 0;
 }
@@ -248,7 +257,7 @@ main (int argc, const char *argv[])
     riemann_circuit_breaker = RIEMANN_CB_CLOSED;
   }
   else {
-    riemann_connect(riemann_server, riemann_port);
+    riemann_connect (riemann_server, riemann_port);
   }
 
   for (; !done;) {
