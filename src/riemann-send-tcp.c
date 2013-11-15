@@ -23,10 +23,14 @@
 
 int done = 0;
 
+#define RIEMANN_CB_OPEN 0
+#define RIEMANN_CB_HALF_OPEN 1
+#define RIEMANN_CB_CLOSED 2
+
 char *riemann_server = "localhost";
-char *riemann_protocol = "udp";
+char *riemann_protocol = "tcp";
 int riemann_port = 5555;
-int riemann_is_available = 0;
+int riemann_circuit_breaker = RIEMANN_CB_CLOSED;
 
 int sockfd;
 struct sockaddr_in servaddr;
@@ -143,7 +147,7 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
 
   int nbytes = 0;
 
-  if (riemann_is_available) {
+  if (riemann_circuit_breaker == RIEMANN_CB_CLOSED) {
     if (!strcmp (riemann_protocol, "udp")) {
       nbytes = sendto (sockfd, buf, len, 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
     }
@@ -161,7 +165,7 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
     }
   }
   else {
-    printf ("[riemann] Not sending metric via TCP! Riemann DOWN!!!\n");
+    printf ("[riemann] Circuit breaker ON... Not sending metric via TCP! Riemann DOWN!!!\n");
   }
 
   for (i = 0; i < evt.n_attributes; i++) {
@@ -192,19 +196,30 @@ circuit_breaker (apr_thread_t * thd, void *data)
     printf ("[cb] checking connection...\n");
     // rc = riemann_connect(riemann_server, riemann_port);
     if (rc == 1) {
-      riemann_is_available = 0; /* DOWN */
+      riemann_circuit_breaker = RIEMANN_CB_OPEN; /* DOWN */
     }
     else {
-      riemann_is_available = 1; /* UP */
+      riemann_circuit_breaker = RIEMANN_CB_CLOSED; /* UP */
       // riemann_close();
     }
-    printf ("[cb] riemann is %s\n", riemann_is_available ? "UP" : "DOWN");
+    printf ("[cb] riemann is %s\n",
+      riemann_circuit_breaker == RIEMANN_CB_OPEN      ? "OPEN" :
+      riemann_circuit_breaker == RIEMANN_CB_HALF_OPEN ? "HALF_OPEN"
+                              /* RIEMANN_CB_CLOSED */ : "CLOSED"
+
+);
 
     apr_sleep (15 * 1000 * 1000);
   }
   apr_thread_exit (thd, APR_SUCCESS);
 
   return NULL;
+}
+
+int
+riemann_connect(const char *hostname, uint16_t port)
+{
+  return 0;
 }
 
 int
@@ -230,10 +245,10 @@ main (int argc, const char *argv[])
     servaddr.sin_addr.s_addr = inet_addr ("127.0.0.1");
     servaddr.sin_port = htons (5555);
 
-    riemann_is_available = 1;
+    riemann_circuit_breaker = RIEMANN_CB_CLOSED;
   }
   else {
-    /* riemann_connect() */
+    riemann_connect(riemann_server, riemann_port);
   }
 
   for (; !done;) {
