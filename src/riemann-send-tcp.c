@@ -24,6 +24,7 @@
 int done = 0;
 
 char *riemann_server = "localhost";
+char *riemann_protocol = "tcp";
 int riemann_port = 5555;
 int riemann_is_available = 0;
 
@@ -55,49 +56,52 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
   int i;
   char *buffer = NULL;
 
-  printf("[riemann] grid=%s, cluster=%s, host=%s, ip=%s, metric=%s, value=%s %s, type=%s, state=%s, localtime=%u, tags=%s, location=%s, ttl=%u\n",
-            grid, cluster, host, ip, metric, value, units, type, state, localtime, tags_str, location, ttl);
+  printf
+    ("[riemann] grid=%s, cluster=%s, host=%s, ip=%s, metric=%s, value=%s %s, type=%s, state=%s, localtime=%u, tags=%s, location=%s, ttl=%u\n",
+     grid, cluster, host, ip, metric, value, units, type, state, localtime, tags_str, location, ttl);
 
   Event evt = EVENT__INIT;
 
-  evt.host = (char *)host;
-  evt.service = (char *)metric;
+  evt.host = (char *) host;
+  evt.service = (char *) metric;
 
-   if (value) {
-       if (!strcmp(type, "int")) {
-           evt.has_metric_sint64 = 1;
-           evt.metric_sint64 = strtol(value, (char **) NULL , 10 );
-       } else if (!strcmp(type, "float")) {
-           evt.has_metric_d = 1;
-           evt.metric_d = (double) strtod(value, (char**) NULL);
-       } else {
-           evt.state = (char *)value;
-       }
-   }
-  evt.description = (char *)units;
+  if (value) {
+    if (!strcmp (type, "int")) {
+      evt.has_metric_sint64 = 1;
+      evt.metric_sint64 = strtol (value, (char **) NULL, 10);
+    }
+    else if (!strcmp (type, "float")) {
+      evt.has_metric_d = 1;
+      evt.metric_d = (double) strtod (value, (char **) NULL);
+    }
+    else {
+      evt.state = (char *) value;
+    }
+  }
+  evt.description = (char *) units;
 
-   if (state)
-      evt.state = (char *)state;
+  if (state)
+    evt.state = (char *) state;
 
-   if (localtime)
-      evt.time = localtime;
+  if (localtime)
+    evt.time = localtime;
 
   char *tags[64] = { NULL };
-  buffer = strdup(tags_str);
+  buffer = strdup (tags_str);
 
-  evt.n_tags = tokenize (buffer, ",", tags);  /* assume tags are comma-separated */
+  evt.n_tags = tokenize (buffer, ",", tags);    /* assume tags are comma-separated */
   evt.tags = tags;
-  free(buffer);
+  free (buffer);
 
   char attr_str[512];
-  sprintf(attr_str, "grid=%s,cluster=%s,ip=%s,location=%s", grid, cluster, ip, location);
+  sprintf (attr_str, "grid=%s,cluster=%s,ip=%s,location=%s", grid, cluster, ip, location);
 
   int n_attrs;
   char *kv[64] = { NULL };
-  buffer = strdup(attr_str);
+  buffer = strdup (attr_str);
 
   n_attrs = tokenize (buffer, ",", kv);
-  free(buffer);
+  free (buffer);
 
   Attribute **attrs;
   attrs = malloc (sizeof (Attribute *) * n_attrs);
@@ -123,47 +127,57 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
   unsigned len;
 
   riemann_msg.n_events = 1;
-  riemann_msg.events = malloc(sizeof (Event) * riemann_msg.n_events);
+  riemann_msg.events = malloc (sizeof (Event) * riemann_msg.n_events);
   riemann_msg.events[0] = &evt;
 
-  len = msg__get_packed_size(&riemann_msg);
-  buf = malloc(len);
-  msg__pack(&riemann_msg, buf);
+  len = msg__get_packed_size (&riemann_msg);
+  buf = malloc (len);
+  msg__pack (&riemann_msg, buf);
 
-  printf("[riemann] %zu host=%s, service=%s, state=%s, metric_f=%f, metric_d=%lf, metric_sint64=%" PRId64 ", description=%s, ttl=%f, tags(%zu), attributes(%zu)\n", evt.time, evt.host, evt.service, evt.state, evt.metric_f, evt.metric_d, evt.metric_sint64, evt.description, evt.ttl, evt.n_tags, evt.n_attributes);
-
+  printf ("[riemann] %zu host=%s, service=%s, state=%s, metric_f=%f, metric_d=%lf, metric_sint64=%" PRId64
+          ", description=%s, ttl=%f, tags(%zu), attributes(%zu)\n", evt.time, evt.host, evt.service, evt.state, evt.metric_f,
+          evt.metric_d, evt.metric_sint64, evt.description, evt.ttl, evt.n_tags, evt.n_attributes);
 
   int sockfd, nbytes;
-  struct sockaddr_in servaddr;
-  sockfd = socket (AF_INET, SOCK_DGRAM, 0);
 
-  bzero (&servaddr, sizeof (servaddr));
-  servaddr.sin_family = AF_INET;
-  servaddr.sin_addr.s_addr = inet_addr ("127.0.0.1");
-  servaddr.sin_port = htons (5555);
+  if (!strcmp (riemann_protocol, "udp")) {
+    struct sockaddr_in servaddr;
+    sockfd = socket (AF_INET, SOCK_DGRAM, 0);
 
-  nbytes = sendto (sockfd, buf, len, 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
+    bzero (&servaddr, sizeof (servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = inet_addr ("127.0.0.1");
+    servaddr.sin_port = htons (5555);
 
-  if (nbytes != len)
-  {
-         fprintf(stderr, "[riemann] sendto socket (client): %s\n", strerror(errno));
-         return EXIT_FAILURE;
-  } else {
-      printf("[riemann] Sent %d serialized bytes\n", len);
+    nbytes = sendto (sockfd, buf, len, 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
+
+  }
+  else {
+
+    printf ("send tcp\n");
+
+  }
+
+  if (nbytes != len) {
+    fprintf (stderr, "[riemann] sendto socket (client): %s\n", strerror (errno));
+    return EXIT_FAILURE;
+  }
+  else {
+    printf ("[riemann] Sent %d serialized bytes\n", len);
   }
 
   for (i = 0; i < evt.n_attributes; i++) {
-     free(attrs[i]->key);
-     free(attrs[i]->value);
-     free(attrs[i]);
-     free(kv[i]);
+    free (attrs[i]->key);
+    free (attrs[i]->value);
+    free (attrs[i]);
+    free (kv[i]);
   }
-  free(attrs);
+  free (attrs);
   for (i = 0; i < evt.n_tags; i++) {
-     free(tags[i]);
+    free (tags[i]);
   }
-  free(riemann_msg.events);
-  free(buf);
+  free (riemann_msg.events);
+  free (buf);
 
   return 0;
 
@@ -177,7 +191,7 @@ circuit_breaker (apr_thread_t * thd, void *data)
   printf ("[cb] start...\n");
 
   for (; !done;) {
-    printf("[cb] checking connection...\n");
+    printf ("[cb] checking connection...\n");
     // rc = riemann_connect(riemann_server, riemann_port);
     if (rc == 1) {
       riemann_is_available = 0; /* DOWN */
@@ -186,7 +200,7 @@ circuit_breaker (apr_thread_t * thd, void *data)
       riemann_is_available = 1; /* UP */
       // riemann_close();
     }
-    apr_sleep (15*1000*1000);
+    apr_sleep (15 * 1000 * 1000);
   }
   apr_thread_exit (thd, APR_SUCCESS);
 
@@ -210,8 +224,9 @@ main (int argc, const char *argv[])
 
   for (; !done;) {
 
-    send_data_to_riemann ("MyGrid", "clust01", "myhost555", "10.1.1.1", "cpu_system", "100.0", "float", "%", "ok", 1234567890, "tag1,tag2", "london", 180);
+    send_data_to_riemann ("MyGrid", "clust01", "myhost555", "10.1.1.1", "cpu_system", "100.0", "float", "%", "ok",
+                          1234567890, "tag1,tag2", "london", 180);
 
-    apr_sleep (2*1000*1000);
+    apr_sleep (2 * 1000 * 1000);
   }
 }
