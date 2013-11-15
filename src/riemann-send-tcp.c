@@ -22,6 +22,9 @@
 #include <apr_thread_proc.h>
 
 int done = 0;
+
+char *riemann_server = "localhost";
+int riemann_port = 5555;
 int riemann_is_available = 0;
 
 int
@@ -50,7 +53,8 @@ circuit_breaker (apr_thread_t * thd, void *data)
   printf ("[cb] start...\n");
 
   for (; !done;) {
-    // rc = riemann_connect("localhost", 5555);
+    printf("[cb] checking connection...\n");
+    // rc = riemann_connect(riemann_server, riemann_port);
     if (rc == 1) {
       riemann_is_available = 0; /* DOWN */
     }
@@ -58,7 +62,7 @@ circuit_breaker (apr_thread_t * thd, void *data)
       riemann_is_available = 1; /* UP */
       // riemann_close();
     }
-    apr_sleep (15);
+    apr_sleep (15*1000*1000);
   }
   apr_thread_exit (thd, APR_SUCCESS);
 
@@ -161,8 +165,8 @@ main (int argc, const char *argv[])
 
     bzero (&servaddr, sizeof (servaddr));
     servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = inet_addr ("127.0.0.1");
-    servaddr.sin_port = htons (5555);
+    servaddr.sin_addr.s_addr = inet_addr (riemann_server);
+    servaddr.sin_port = htons (riemann_port);
 
     sendto (sockfd, buf, len, 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
 
@@ -175,6 +179,7 @@ main (int argc, const char *argv[])
     free (riemann_msg.events);
     free (buf);
 
+    apr_sleep (2*1000*1000);
   }
 
   return 0;
