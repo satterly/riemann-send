@@ -18,6 +18,9 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+#include <fcntl.h>
+#include <errno.h>
+#include <sys/poll.h>
 #include <apr_general.h>
 #include <apr_thread_proc.h>
 
@@ -63,14 +66,33 @@ riemann_connect (const char *server, int port)
     return -1;
   }
 
-  if (connect (sockfd, (struct sockaddr *) &remote_addr, sizeof (remote_addr)) < 0) {
-    perror ("Connect failed");
+  if (riemann_tcp_socket)
+    close(riemann_tcp_socket);
+
+  // set to non-blocking
+  long flags = fcntl(sockfd, F_GETFL, 0);
+  fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+
+  connect (sockfd, (struct sockaddr *) &remote_addr, sizeof (remote_addr));
+
+  struct pollfd pfd;
+
+  pfd.fd = sockfd;
+  pfd.events = POLLOUT;
+  int rv = poll(&pfd, 1, 200);
+
+  if (rv < 0) {
+    printf("poll() error\n");
+    return -1;
+  } else if (rv == 0) {
+    printf("timeout\n");
     return -1;
   }
-  else {
-    printf ("Connected to %s:%d\n", server, port);
-  }
-  return sockfd;
+
+  if (pfd.revents & POLLOUT)
+    return sockfd;
+  else
+    return -1;
 }
 
 int
@@ -207,6 +229,7 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
       nbytes = send (riemann_tcp_socket, buf, len, 0);
       free (buf);
 
+      /*
       Msg *msg;
       uint32_t header, len;
       uint8_t *buffer;
@@ -219,6 +242,7 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
       msg = msg__unpack (NULL, len, buffer);
       printf ("ok %d\n", msg->ok);
       free (buffer);
+      */
     }
 
     if (nbytes != len) {
