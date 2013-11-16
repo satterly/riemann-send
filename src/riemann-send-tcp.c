@@ -67,11 +67,11 @@ riemann_connect (const char *server, int port)
   }
 
   if (riemann_tcp_socket)
-    close(riemann_tcp_socket);
+    close (riemann_tcp_socket);
 
   // set to non-blocking
-  long flags = fcntl(sockfd, F_GETFL, 0);
-  fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+  long flags = fcntl (sockfd, F_GETFL, 0);
+  fcntl (sockfd, F_SETFL, flags | O_NONBLOCK);
 
   connect (sockfd, (struct sockaddr *) &remote_addr, sizeof (remote_addr));
 
@@ -79,20 +79,24 @@ riemann_connect (const char *server, int port)
 
   pfd.fd = sockfd;
   pfd.events = POLLOUT;
-  int rv = poll(&pfd, 1, 200);
+  int rv = poll (&pfd, 1, 200);
 
   if (rv < 0) {
-    printf("poll() error\n");
+    printf ("poll() error\n");
     return -1;
-  } else if (rv == 0) {
-    printf("timeout\n");
+  }
+  else if (rv == 0) {
+    printf ("timeout\n");
     return -1;
   }
 
-  if (pfd.revents & POLLOUT)
+  if (pfd.revents & POLLOUT) {
+    printf("socket ready!\n");
+    /* fcntl (sockfd, F_SETFL, flags); */
     return sockfd;
-  else
+  } else {
     return -1;
+  }
 }
 
 int
@@ -145,6 +149,7 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
       evt.state = (char *) value;
     }
   }
+
   evt.description = (char *) units;
 
   if (state)
@@ -156,7 +161,7 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
   char *tags[64] = { NULL };
   buffer = strdup (tags_str);
 
-  evt.n_tags = tokenize (buffer, ",", tags);    /* assume tags are comma-separated */
+  evt.n_tags = tokenize (buffer, ",", tags);
   evt.tags = tags;
   free (buffer);
 
@@ -229,20 +234,25 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
       nbytes = send (riemann_tcp_socket, buf, len, 0);
       free (buf);
 
-      /*
       Msg *msg;
       uint32_t header, len;
       uint8_t *buffer;
       ssize_t response;
 
+      printf ("wait for response...\n");
       response = recv (riemann_tcp_socket, &header, sizeof (header), 0);
-      len = ntohl (header);
-      buffer = malloc (len);
-      response = recv (riemann_tcp_socket, buffer, len, 0);
-      msg = msg__unpack (NULL, len, buffer);
-      printf ("ok %d\n", msg->ok);
-      free (buffer);
-      */
+      if (response != sizeof (header)) {
+        printf ("[riemann] error in response\n");
+      }
+      else {
+        len = ntohl (header);
+        printf ("header is %d\n", len);
+        buffer = malloc (len);
+        response = recv (riemann_tcp_socket, buffer, len, 0);
+        msg = msg__unpack (NULL, len, buffer);
+        printf ("ok %d\n", msg->ok);
+        free (buffer);
+      }
     }
 
     if (nbytes != len) {
@@ -270,13 +280,13 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
     free (kv[i]);
   }
   free (attrs);
+
   for (i = 0; i < evt.n_tags; i++) {
     free (tags[i]);
   }
   free (riemann_msg.events);
 
   return 0;
-
 }
 
 static void *APR_THREAD_FUNC
@@ -293,6 +303,7 @@ circuit_breaker (apr_thread_t * thd, void *data)
       riemann_circuit_breaker = RIEMANN_CB_HALF_OPEN;
       /* retry connection */
       riemann_tcp_socket = riemann_connect (riemann_server, riemann_port);
+      printf("riemann_tcp_socket = %d\n", riemann_tcp_socket);
       if (riemann_tcp_socket < 0) {
         riemann_circuit_breaker = RIEMANN_CB_OPEN;
         riemann_reset_timeout = apr_time_now () + RIEMANN_TIMEOUT;      /* 60 seconds */
