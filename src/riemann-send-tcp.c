@@ -73,7 +73,6 @@ riemann_connect (const char *server, int port)
   return sockfd;
 }
 
-
 int
 tokenize (char *str, char *delim, char **tokens)
 {
@@ -169,16 +168,22 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
   evt.ttl = ttl;
 
   Msg riemann_msg = MSG__INIT;
-  void *buf;
   unsigned len;
 
   riemann_msg.n_events = 1;
   riemann_msg.events = malloc (sizeof (Event) * riemann_msg.n_events);
   riemann_msg.events[0] = &evt;
 
-  len = msg__get_packed_size (&riemann_msg);
+  struct
+  {
+    uint32_t header;
+    uint8_t data[0];
+  } *buf;
+
+  len = msg__get_packed_size (&riemann_msg) + sizeof (buf->header);
   buf = malloc (len);
-  msg__pack (&riemann_msg, buf);
+  msg__pack (&riemann_msg, buf->data);
+  buf->header = htonl(len - sizeof (buf->header));
 
   printf ("[riemann] %zu host=%s, service=%s, state=%s, metric_f=%f, metric_d=%lf, metric_sint64=%" PRId64
           ", description=%s, ttl=%f, tags(%zu), attributes(%zu)\n", evt.time, evt.host, evt.service, evt.state, evt.metric_f,
