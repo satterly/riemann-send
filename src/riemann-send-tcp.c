@@ -174,17 +174,6 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
   riemann_msg.events = malloc (sizeof (Event) * riemann_msg.n_events);
   riemann_msg.events[0] = &evt;
 
-  struct
-  {
-    uint32_t header;
-    uint8_t data[0];
-  } *buf;
-
-  len = msg__get_packed_size (&riemann_msg) + sizeof (buf->header);
-  buf = malloc (len);
-  msg__pack (&riemann_msg, buf->data);
-  buf->header = htonl(len - sizeof (buf->header));
-
   printf ("[riemann] %zu host=%s, service=%s, state=%s, metric_f=%f, metric_d=%lf, metric_sint64=%" PRId64
           ", description=%s, ttl=%f, tags(%zu), attributes(%zu)\n", evt.time, evt.host, evt.service, evt.state, evt.metric_f,
           evt.metric_d, evt.metric_sint64, evt.description, evt.ttl, evt.n_tags, evt.n_attributes);
@@ -193,24 +182,43 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
 
   if (riemann_circuit_breaker == RIEMANN_CB_CLOSED) {
     if (!strcmp (riemann_protocol, "udp")) {
+
+      void *buf;
+      len = msg__get_packed_size (&riemann_msg);
+      buf = malloc (len);
+      msg__pack (&riemann_msg, buf);
+
       nbytes = sendto (riemann_tcp_socket, buf, len, 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
+      free (buf);
     }
     else {
       printf ("[riemann] Sending metric via TCP...");
+      struct
+      {
+        uint32_t header;
+        uint8_t data[0];
+      } *buf;
+
+      len = msg__get_packed_size (&riemann_msg) + sizeof (buf->header);
+      buf = malloc (len);
+      msg__pack (&riemann_msg, buf->data);
+      buf->header = htonl (len - sizeof (buf->header));
+
       nbytes = send (riemann_tcp_socket, buf, len, 0);
+      free (buf);
 
       Msg *msg;
       uint32_t header, len;
       uint8_t *buffer;
       ssize_t response;
 
-      response = recv (riemann_tcp_socket, &header, sizeof(header), 0);
-      len = ntohl(header);
-      buffer = malloc(len);
+      response = recv (riemann_tcp_socket, &header, sizeof (header), 0);
+      len = ntohl (header);
+      buffer = malloc (len);
       response = recv (riemann_tcp_socket, buffer, len, 0);
-      msg = msg__unpack(NULL, len, buffer);
-      printf("ok %d\n", msg->ok);
-
+      msg = msg__unpack (NULL, len, buffer);
+      printf ("ok %d\n", msg->ok);
+      free (buffer);
     }
 
     if (nbytes != len) {
@@ -242,7 +250,6 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
     free (tags[i]);
   }
   free (riemann_msg.events);
-  free (buf);
 
   return 0;
 
