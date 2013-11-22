@@ -198,6 +198,7 @@ create_riemann_event (const char *grid, const char *cluster, const char *host, c
 int
 send_message_to_riemann (Msg *riemann_msg)
 {
+  unsigned len;
   int nbytes = 0;
 
   if (riemann_circuit_breaker == RIEMANN_CB_CLOSED) {
@@ -270,6 +271,8 @@ send_message_to_riemann (Msg *riemann_msg)
 int
 delete_riemann_event(Event *event)
 {
+  int i;
+/*
   for (i = 0; i < event->n_attributes; i++) {
     free (attrs[i]->key);
     free (attrs[i]->value);
@@ -281,7 +284,13 @@ delete_riemann_event(Event *event)
   for (i = 0; i < event->n_tags; i++) {
     free (tags[i]);
   }
-  free (riemann_msg.events);
+*/
+}
+
+int
+delete_riemann_message(Msg *riemann_msg)
+{
+  free (riemann_msg->events);
 }
 
 static void *APR_THREAD_FUNC
@@ -367,7 +376,8 @@ main (int argc, const char *argv[])
   /* main */
 
   Event *event;
-  Msg riemann_msg = MSG__INIT;
+  Msg *riemann_msg;
+  msg__init (riemann_msg);
   int num_events = 0;
 
     event = create_riemann_event ("MyGrid", "clust01", "myhost555", "10.1.1.1", "cpu_system", "100.0", "float", "%", "ok",
@@ -377,10 +387,13 @@ main (int argc, const char *argv[])
             ", description=%s, ttl=%f, tags(%zu), attributes(%zu)\n", event->time, event->host, event->service, event->state, event->metric_f,
             event->metric_d, event->metric_sint64, event->description, event->ttl, event->n_tags, event->n_attributes);
 
-    riemann_msg.events = malloc (sizeof (Event) * riemann_msg.n_events);  /* FIXME realloc() */
-    riemann_msg.events[num_events] = event;
+    riemann_msg->events = malloc (sizeof (Event));  /* FIXME realloc() */
+    riemann_msg->events[num_events] = event;
     num_events++;
-    riemann_msg.n_events = num_events;
+    riemann_msg->n_events = num_events;
 
   send_message_to_riemann(riemann_msg);
+
+  delete_riemann_event(event);
+  delete_riemann_message(riemann_msg);
 }
