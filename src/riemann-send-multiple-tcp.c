@@ -156,9 +156,7 @@ create_riemann_event (const char *grid, const char *cluster, const char *host, c
     event->time = localtime;
 
   char *tags[64] = { NULL };
-  buffer = strdup (tags_str);
-
-  char *buffer = NULL;
+  char *buffer = strdup (tags_str);
 
   event->n_tags = tokenize (buffer, ",", tags);
   event->tags = tags;
@@ -193,7 +191,7 @@ create_riemann_event (const char *grid, const char *cluster, const char *host, c
 
   event->has_ttl = 1;
   event->ttl = ttl;
-
+/*
   Msg riemann_msg = MSG__INIT;
   unsigned len;
 
@@ -260,7 +258,7 @@ create_riemann_event (const char *grid, const char *cluster, const char *host, c
       riemann_failures++;
       if (riemann_failures > RIEMANN_MAX_FAILURES) {
         riemann_circuit_breaker = RIEMANN_CB_OPEN;
-        riemann_reset_timeout = apr_time_now () + RIEMANN_TIMEOUT;      /* 60 seconds */
+        riemann_reset_timeout = apr_time_now () + RIEMANN_TIMEOUT;
       }
       return EXIT_FAILURE;
     }
@@ -285,7 +283,7 @@ create_riemann_event (const char *grid, const char *cluster, const char *host, c
     free (tags[i]);
   }
   free (riemann_msg.events);
-
+*/
   return event;
 }
 
@@ -369,9 +367,11 @@ main (int argc, const char *argv[])
     }
   }
 
+  Event *event;
+
   for (; !done;) {
 
-    send_data_to_riemann ("MyGrid", "clust01", "myhost555", "10.1.1.1", "cpu_system", "100.0", "float", "%", "ok",
+    event = create_riemann_event ("MyGrid", "clust01", "myhost555", "10.1.1.1", "cpu_system", "100.0", "float", "%", "ok",
                           1234567890, "tag1,tag2", "london", 180);
 
     apr_sleep (2 * 1000 * 1000);
