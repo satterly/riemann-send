@@ -117,52 +117,51 @@ tokenize (char *str, char *delim, char **tokens)
   return i++;
 }
 
-int
-send_data_to_riemann (const char *grid, const char *cluster, const char *host, const char *ip,
+Event *
+create_riemann_event (const char *grid, const char *cluster, const char *host, const char *ip,
                       const char *metric, const char *value, const char *type, const char *units,
                       const char *state, unsigned int localtime, const char *tags_str,
                       const char *location, unsigned int ttl)
 {
-
-  int i;
-  char *buffer = NULL;
-
   printf
     ("[riemann] grid=%s, cluster=%s, host=%s, ip=%s, metric=%s, value=%s %s, type=%s, state=%s, localtime=%u, tags=%s, location=%s, ttl=%u\n",
      grid, cluster, host, ip, metric, value, units, type, state, localtime, tags_str, location, ttl);
 
-  Event evt = EVENT__INIT;
+  Event *event = malloc (sizeof (Event));
+  event__init (event);
 
-  evt.host = (char *) host;
-  evt.service = (char *) metric;
+  event->host = (char *) host;
+  event->service = (char *) metric;
 
   if (value) {
     if (!strcmp (type, "int")) {
-      evt.has_metric_sint64 = 1;
-      evt.metric_sint64 = strtol (value, (char **) NULL, 10);
+      event->has_metric_sint64 = 1;
+      event->metric_sint64 = strtol (value, (char **) NULL, 10);
     }
     else if (!strcmp (type, "float")) {
-      evt.has_metric_d = 1;
-      evt.metric_d = (double) strtod (value, (char **) NULL);
+      event->has_metric_d = 1;
+      event->metric_d = (double) strtod (value, (char **) NULL);
     }
     else {
-      evt.state = (char *) value;
+      event->state = (char *) value;
     }
   }
 
-  evt.description = (char *) units;
+  event->description = (char *) units;
 
   if (state)
-    evt.state = (char *) state;
+    event->state = (char *) state;
 
   if (localtime)
-    evt.time = localtime;
+    event->time = localtime;
 
   char *tags[64] = { NULL };
   buffer = strdup (tags_str);
 
-  evt.n_tags = tokenize (buffer, ",", tags);
-  evt.tags = tags;
+  char *buffer = NULL;
+
+  event->n_tags = tokenize (buffer, ",", tags);
+  event->tags = tags;
   free (buffer);
 
   char attr_str[512];
@@ -178,6 +177,7 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
   Attribute **attrs;
   attrs = malloc (sizeof (Attribute *) * n_attrs);
 
+  int i;
   for (i = 0; i < n_attrs; i++) {
 
     char *pair[1] = { NULL };
@@ -188,11 +188,11 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
     attrs[i]->key = pair[0];
     attrs[i]->value = pair[1];
   }
-  evt.n_attributes = n_attrs;
-  evt.attributes = attrs;
+  event->n_attributes = n_attrs;
+  event->attributes = attrs;
 
-  evt.has_ttl = 1;
-  evt.ttl = ttl;
+  event->has_ttl = 1;
+  event->ttl = ttl;
 
   Msg riemann_msg = MSG__INIT;
   unsigned len;
@@ -202,8 +202,8 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
   riemann_msg.events[0] = &evt;
 
   printf ("[riemann] %zu host=%s, service=%s, state=%s, metric_f=%f, metric_d=%lf, metric_sint64=%" PRId64
-          ", description=%s, ttl=%f, tags(%zu), attributes(%zu)\n", evt.time, evt.host, evt.service, evt.state, evt.metric_f,
-          evt.metric_d, evt.metric_sint64, evt.description, evt.ttl, evt.n_tags, evt.n_attributes);
+          ", description=%s, ttl=%f, tags(%zu), attributes(%zu)\n", event->time, event->host, event->service, event->state, event->metric_f,
+          event->metric_d, event->metric_sint64, event->description, event->ttl, event->n_tags, event->n_attributes);
 
   int nbytes = 0;
 
@@ -273,7 +273,7 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
     printf ("[riemann] Circuit breaker OPEN... Not sending metric via TCP! Riemann DOWN!!!\n");
   }
 
-  for (i = 0; i < evt.n_attributes; i++) {
+  for (i = 0; i < event->n_attributes; i++) {
     free (attrs[i]->key);
     free (attrs[i]->value);
     free (attrs[i]);
@@ -281,12 +281,12 @@ send_data_to_riemann (const char *grid, const char *cluster, const char *host, c
   }
   free (attrs);
 
-  for (i = 0; i < evt.n_tags; i++) {
+  for (i = 0; i < event->n_tags; i++) {
     free (tags[i]);
   }
   free (riemann_msg.events);
 
-  return 0;
+  return event;
 }
 
 static void *APR_THREAD_FUNC
