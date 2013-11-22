@@ -196,7 +196,7 @@ create_riemann_event (const char *grid, const char *cluster, const char *host, c
 }
 
 int
-send_message_to_riemann (Msg *riemann_msg)
+send_message_to_riemann (Msg *message)
 {
   unsigned len;
   int nbytes = 0;
@@ -205,11 +205,11 @@ send_message_to_riemann (Msg *riemann_msg)
     if (!strcmp (riemann_protocol, "udp")) {
 
       void *buf;
-      len = msg__get_packed_size (&riemann_msg);
+      len = msg__get_packed_size (message);
       buf = malloc (len);
-      msg__pack (&riemann_msg, buf);
+      msg__pack (message, buf);
 
-      nbytes = sendto (riemann_tcp_socket, buf, len, 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
+      // nbytes = sendto (riemann_tcp_socket, buf, len, 0, (struct sockaddr *) &servaddr, sizeof (servaddr));
       free (buf);
     }
     else {
@@ -220,31 +220,32 @@ send_message_to_riemann (Msg *riemann_msg)
         uint8_t data[0];
       } *buf;
 
-      len = msg__get_packed_size (&riemann_msg) + sizeof (buf->header);
+      len = msg__get_packed_size (message) + sizeof (buf->header);
       buf = malloc (len);
-      msg__pack (&riemann_msg, buf->data);
+      msg__pack (message, buf->data);
       buf->header = htonl (len - sizeof (buf->header));
 
       nbytes = send (riemann_tcp_socket, buf, len, 0);
       free (buf);
 
-      Msg *msg;
+      Msg *response;
       uint32_t header, len;
       uint8_t *buffer;
-      ssize_t response;
+      ssize_t rbytes;
 
       printf ("wait for response...\n");
-      response = recv (riemann_tcp_socket, &header, sizeof (header), 0);
-      if (response != sizeof (header)) {
+      rbytes = recv (riemann_tcp_socket, &header, sizeof (header), 0);
+      if (rbytes != sizeof (header)) {
         printf ("[riemann] error in response\n");
       }
       else {
         len = ntohl (header);
         printf ("header is %d\n", len);
         buffer = malloc (len);
-        response = recv (riemann_tcp_socket, buffer, len, 0);
-        msg = msg__unpack (NULL, len, buffer);
-        printf ("ok %d\n", msg->ok);
+        rbytes = recv (riemann_tcp_socket, buffer, len, 0);
+        response = msg__unpack (NULL, len, buffer);
+        printf ("ok %d\n", response->ok);
+        if (!response->ok)  printf("NOT OK\n");
         free (buffer);
       }
     }
@@ -376,23 +377,30 @@ main (int argc, const char *argv[])
   /* main */
 
   Event *event;
-  Msg *riemann_msg;
-  msg__init (riemann_msg);
-  int num_events = 0;
+  Event *event2;
 
-    event = create_riemann_event ("MyGrid", "clust01", "myhost555", "10.1.1.1", "cpu_system", "100.0", "float", "%", "ok",
+  event = create_riemann_event ("MyGrid", "clust01", "myhost555", "10.1.1.1", "cpu_system", "100.0", "float", "%", "ok",
                           1234567890, "tag1,tag2", "london", 180);
 
-    printf ("[riemann] %zu host=%s, service=%s, state=%s, metric_f=%f, metric_d=%lf, metric_sint64=%" PRId64
-            ", description=%s, ttl=%f, tags(%zu), attributes(%zu)\n", event->time, event->host, event->service, event->state, event->metric_f,
-            event->metric_d, event->metric_sint64, event->description, event->ttl, event->n_tags, event->n_attributes);
+  printf ("[riemann] %zu host=%s, service=%s, state=%s, metric_f=%f, metric_d=%lf, metric_sint64=%" PRId64
+          ", description=%s, ttl=%f, tags(%zu), attributes(%zu)\n", event->time, event->host, event->service, event->state, event->metric_f,
+          event->metric_d, event->metric_sint64, event->description, event->ttl, event->n_tags, event->n_attributes);
 
-    riemann_msg->events = malloc (sizeof (Event));  /* FIXME realloc() */
-    riemann_msg->events[num_events] = event;
-    num_events++;
-    riemann_msg->n_events = num_events;
+  event2 = create_riemann_event ("MyGrid2", "clust02", "myhost222", "20.2.2.2", "cpu_system", "100.0", "float", "%", "ok",
+                          1234567890, "tag1,tag2", "london", 180);
 
+  Msg *riemann_msg;
+  riemann_msg = malloc (sizeof (Msg));
+  msg__init (riemann_msg);
+
+  riemann_msg->events = malloc (sizeof (Event) * 2);  /* FIXME realloc() */
+  riemann_msg->n_events = 2;
+  riemann_msg->events[0] = event;
+  riemann_msg->events[1] = event2;
+
+  printf("sending...\n");
   send_message_to_riemann(riemann_msg);
+  printf("sent!\n");
 
   delete_riemann_event(event);
   delete_riemann_message(riemann_msg);
