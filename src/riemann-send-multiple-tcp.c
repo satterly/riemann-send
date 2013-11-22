@@ -288,11 +288,6 @@ delete_riemann_event(Event *event)
 */
 }
 
-int
-delete_riemann_message(Msg *riemann_msg)
-{
-  free (riemann_msg->events);
-}
 
 static void *APR_THREAD_FUNC
 circuit_breaker (apr_thread_t * thd, void *data)
@@ -377,8 +372,6 @@ main (int argc, const char *argv[])
   /* main */
 
   Event *event;
-  Event *event2;
-
   event = create_riemann_event ("MyGrid", "clust01", "myhost555", "10.1.1.1", "cpu_system", "100.0", "float", "%", "ok",
                           1234567890, "tag1,tag2", "london", 180);
 
@@ -386,6 +379,7 @@ main (int argc, const char *argv[])
           ", description=%s, ttl=%f, tags(%zu), attributes(%zu)\n", event->time, event->host, event->service, event->state, event->metric_f,
           event->metric_d, event->metric_sint64, event->description, event->ttl, event->n_tags, event->n_attributes);
 
+  Event *event2;
   event2 = create_riemann_event ("MyGrid2", "clust02", "myhost222", "20.2.2.2", "cpu_system", "100.0", "float", "%", "ok",
                           1234567890, "tag1,tag2", "london", 180);
 
@@ -398,10 +392,12 @@ main (int argc, const char *argv[])
   riemann_msg->events[0] = event;
   riemann_msg->events[1] = event2;
 
+  delete_riemann_event(event);
+  delete_riemann_event(event2);
+
   printf("sending...\n");
   send_message_to_riemann(riemann_msg);
   printf("sent!\n");
 
-  delete_riemann_event(event);
-  delete_riemann_message(riemann_msg);
+  free (riemann_msg->events);
 }
