@@ -191,18 +191,13 @@ create_riemann_event (const char *grid, const char *cluster, const char *host, c
 
   event->has_ttl = 1;
   event->ttl = ttl;
-/*
-  Msg riemann_msg = MSG__INIT;
-  unsigned len;
 
-  riemann_msg.n_events = 1;
-  riemann_msg.events = malloc (sizeof (Event) * riemann_msg.n_events);
-  riemann_msg.events[0] = &evt;
+  return event;
+}
 
-  printf ("[riemann] %zu host=%s, service=%s, state=%s, metric_f=%f, metric_d=%lf, metric_sint64=%" PRId64
-          ", description=%s, ttl=%f, tags(%zu), attributes(%zu)\n", event->time, event->host, event->service, event->state, event->metric_f,
-          event->metric_d, event->metric_sint64, event->description, event->ttl, event->n_tags, event->n_attributes);
-
+int
+send_message_to_riemann (Msg *riemann_msg)
+{
   int nbytes = 0;
 
   if (riemann_circuit_breaker == RIEMANN_CB_CLOSED) {
@@ -270,7 +265,11 @@ create_riemann_event (const char *grid, const char *cluster, const char *host, c
   else if (riemann_circuit_breaker == RIEMANN_CB_OPEN) {
     printf ("[riemann] Circuit breaker OPEN... Not sending metric via TCP! Riemann DOWN!!!\n");
   }
+}
 
+int
+delete_riemann_event(Event *event)
+{
   for (i = 0; i < event->n_attributes; i++) {
     free (attrs[i]->key);
     free (attrs[i]->value);
@@ -283,8 +282,6 @@ create_riemann_event (const char *grid, const char *cluster, const char *host, c
     free (tags[i]);
   }
   free (riemann_msg.events);
-*/
-  return event;
 }
 
 static void *APR_THREAD_FUNC
@@ -317,8 +314,8 @@ circuit_breaker (apr_thread_t * thd, void *data)
             riemann_circuit_breaker == RIEMANN_CB_HALF_OPEN ? "HALF_OPEN"
             /* RIEMANN_CB_CLOSED */ : "CLOSED");
 
-    apr_sleep (15 * 1000 * 1000);
   }
+
   apr_thread_exit (thd, APR_SUCCESS);
 
   return NULL;
@@ -367,13 +364,23 @@ main (int argc, const char *argv[])
     }
   }
 
-  Event *event;
+  /* main */
 
-  for (; !done;) {
+  Event *event;
+  Msg riemann_msg = MSG__INIT;
+  int num_events = 0;
 
     event = create_riemann_event ("MyGrid", "clust01", "myhost555", "10.1.1.1", "cpu_system", "100.0", "float", "%", "ok",
                           1234567890, "tag1,tag2", "london", 180);
 
-    apr_sleep (2 * 1000 * 1000);
-  }
+    printf ("[riemann] %zu host=%s, service=%s, state=%s, metric_f=%f, metric_d=%lf, metric_sint64=%" PRId64
+            ", description=%s, ttl=%f, tags(%zu), attributes(%zu)\n", event->time, event->host, event->service, event->state, event->metric_f,
+            event->metric_d, event->metric_sint64, event->description, event->ttl, event->n_tags, event->n_attributes);
+
+    riemann_msg.events = malloc (sizeof (Event) * riemann_msg.n_events);  /* FIXME realloc() */
+    riemann_msg.events[num_events] = event;
+    num_events++;
+    riemann_msg.n_events = num_events;
+
+  send_message_to_riemann(riemann_msg);
 }
