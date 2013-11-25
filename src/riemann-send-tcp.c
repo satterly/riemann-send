@@ -47,8 +47,7 @@ int riemann_circuit_breaker = RIEMANN_CB_CLOSED;
 int riemann_reset_timeout = 0;
 int riemann_failures = 0;
 
-// char *riemann_attributes = "environment=PROD,customer=Nokia";
-char *riemann_attributes = "";
+char *riemann_attributes = "environment=PROD,customer=Nokia";
 
 __thread Msg *riemann_msg = NULL;
 __thread int riemann_num_events;
