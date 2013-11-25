@@ -47,7 +47,8 @@ int riemann_circuit_breaker = RIEMANN_CB_CLOSED;
 int riemann_reset_timeout = 0;
 int riemann_failures = 0;
 
-char *riemann_attributes = "environment=PROD,customer=Nokia";
+// char *riemann_attributes = "environment=PROD,customer=Nokia";
+char *riemann_attributes = "";
 
 __thread Msg *riemann_msg = NULL;
 __thread int riemann_num_events;
@@ -216,11 +217,12 @@ create_riemann_event (const char *grid, const char *cluster, const char *host, c
   char *tags[64] = { NULL };
 
   event->n_tags = tokenize (tags_str, ",", tags);
-  event->tags = malloc (sizeof (char *) * (event->n_tags + 1));
+  event->tags = malloc (sizeof (char *) * (event->n_tags));
   int j;
   for (j = 0; j< event->n_tags; j++) {
      event->tags[j] = strdup (tags[j]);
      debug_msg("[riemann] tag[%d] = %s\n", j, event->tags[j]);
+     free(tags[j]);
   }
 
   char attr_str[512];
@@ -232,18 +234,21 @@ create_riemann_event (const char *grid, const char *cluster, const char *host, c
   event->n_attributes = tokenize (attr_str, ",", kv);
 
   Attribute **attrs;
-  attrs = malloc (sizeof (Attribute *) * (event->n_attributes + 1));
+  attrs = malloc (sizeof (Attribute *) * (event->n_attributes ));
 
   int i;
   for (i = 0; i < event->n_attributes; i++) {
 
     char *pair[2] = { NULL };
     tokenize (kv[i], "=", pair);
+    free(kv[i]);
 
     attrs[i] = malloc (sizeof (Attribute));
     attribute__init (attrs[i]);
-    attrs[i]->key = pair[0];
-    attrs[i]->value = pair[1];
+    attrs[i]->key = strdup(pair[0]);
+    attrs[i]->value = strdup(pair[1]);
+    free(pair[0]);
+    free(pair[1]);
   }
   event->attributes = attrs;
 
@@ -406,6 +411,48 @@ circuit_breaker (apr_thread_t * thd, void *data)
 }
 
 int
+destroy_riemann_event(Event *event)
+{
+   int i;
+   if (event->host)
+      free(event->host);
+   if (event->service)
+      free(event->service);
+   if (event->state)
+      free(event->state);
+   if (event->description)
+      free(event->description);
+   printf("destroying tags...\n");
+   for (i = 0; i < event->n_tags; i++)
+      free(event->tags[i]);
+   if (event->tags)
+      free(event->tags);
+   printf("destroying attributes...\n");
+   for (i = 0; i < event->n_attributes; i++) {
+      free(event->attributes[i]->key);
+      free(event->attributes[i]->value);
+      free(event->attributes[i]);
+   }
+   if (event->attributes)
+      free(event->attributes);
+   printf("destroying event...\n");
+   free (event);
+}
+
+int
+destroy_riemann_msg(Msg *message)
+{
+   int i;
+   for (i = 0; i < message->n_events; i++) {
+     destroy_riemann_event(message->events[i]);
+     printf("destroyed message->events[%d]\n", i);
+   }
+   if (message->events)
+     free(message->events);
+   free(message);
+}
+
+int
 main (int argc, const char *argv[])
 {
   signal (SIGPIPE, SIG_IGN);
@@ -440,22 +487,36 @@ main (int argc, const char *argv[])
   } else {
     err_quit("ERROR: Riemann protocol must be 'udp' or 'tcp'");
   }
+/*
+  char *keyval[64] = { NULL };
+  int toks = tokenize("foo=bar,baz=qux", ",", keyval);
+  printf ("keyval tokens %d\n", toks);
+  printf ("keyval[0] = %s\n", keyval[0]);
+  int i;
+  for (i = 0; i < toks; i++)
+    free (keyval[i]);
+  exit;
+*/
+/*
   apr_sleep (500 * 1000); // 500ms
-
+*/
   // for (; !done;) {
 
       riemann_msg = malloc (sizeof (Msg));
       msg__init (riemann_msg);
 
       /* EVENT 1 */
+      // Event *event1 = create_riemann_event ("MyGrid", "clust01", "myhost111", "10.1.1.1", "cpu_system", "100.0", "float", "%", "ok",
+      //                     1234567890, "x-loop:1,tag1", "london", 180);
+
       Event *event1 = create_riemann_event ("MyGrid", "clust01", "myhost111", "10.1.1.1", "cpu_system", "100.0", "float", "%", "ok",
-                          1234567890, "x-loop:1,tag1", "london", 180);
+                          1234567890, "", "london", 180);
       riemann_num_events++;
       debug_msg("[riemann] num events = %d\n", riemann_num_events);
+
       riemann_msg->events = malloc (sizeof (Event) * riemann_num_events);
       riemann_msg->n_events = riemann_num_events;
       riemann_msg->events[riemann_num_events - 1] = event1;
-
 
       /* EVENT 2 */
       Event *event2 = create_riemann_event ("MyGrid2", "clust02", "myhost222", "20.2.2.2", "cpu_system", "200.0", "float", "%", "ok",
@@ -466,9 +527,9 @@ main (int argc, const char *argv[])
       riemann_msg->n_events = riemann_num_events;
       riemann_msg->events[riemann_num_events - 1] = event2;
 
+
       debug_msg("[riemann] send %d events in 1 message\n", riemann_num_events);
       send_message_to_riemann(riemann_msg);
-
-    // apr_sleep (2 * 1000 * 1000);
+      destroy_riemann_msg(riemann_msg);
   // }
 }
